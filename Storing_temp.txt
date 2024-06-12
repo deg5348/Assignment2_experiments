@@ -1,0 +1,13 @@
+for val in range(0,len(actions)):
+          plus = '+' if val < len(actions)-1 else ''
+          loopactionval = list(actions.values())[val]
+          loop_row,loop_col = next_position(row,col,loopactionval,ansmatrix)
+          #Bellman Equation used for each actions
+          
+          if val == action_value:
+              customdocument.content += "({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["curr"],t2=float(rewardmatrix[loop_row][loop_col]),t3=GAMMA,t4=float(ansmatrix[loop_row][loop_col]),p=plus)
+              sum[key] += Trans["curr"]*(rewardmatrix[loop_row][loop_col] + GAMMA*ansmatrix[loop_row][loop_col])
+          else:
+            if [row,col] not in [hellstates,goalstate]:
+              customdocument.content +="({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["other"],t2=float(rewardmatrix[loop_row][loop_col]),t3=GAMMA,t4=float(ansmatrix[loop_row][loop_col]),p=plus)
+              sum[key] += Trans["other"]*(rewardmatrix[loop_row][loop_col] + GAMMA*ansmatrix[row][col])

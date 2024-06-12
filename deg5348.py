@@ -1,17 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[106]:
+# In[2]:
 
 
-!pip install python-docx
+import numpy as np
 
-# In[ ]:
-
-
-
-
-# In[107]:
+# In[3]:
 
 
 from docx import Document
@@ -90,6 +85,7 @@ class CustomDocument():
         action (_type_): Actions agent takes
         sumValue (_type_): The Sum value received by Bellman Equation
     """
+    print(sumValue)
     self.contentaction += "\n{act}<{cont} = {sumValue}>\n,".format(act=action,cont=self.content,sumValue=sumValue[action])
     self.content=""
      
@@ -105,39 +101,22 @@ class CustomDocument():
 # 
 # 
 
-# In[108]:
+# In[4]:
 
 
-GAMMA = 0.9
-hellstates = [[2,1],[2,3]]
-goalstate = [4,4]
-Trans = {"curr":0.7,"other":0.1,"terminal":1} # Transition Functions where curr is intended state, other is the unintended state , terminal is the terminal state 
+GRID_SIZE = 4
 
-"""
-# s₁,₁  s₁,₂  s₁,₃  s₁,₄
-# s₂,₁  s₂,₂  s₂,₃  s₂,₄
-# s₃,₁  *s₃,₂  s₃,₃  *s₃,₄
-# s₄,₁  s₄,₂  s₄,₃  s₄,₄
-"""
-# States defined for Rewards
-rewardmatrix = [
-    [-0.1,-0.1,-0.1,-0.1],
-    [-0.1,-0.1,-0.1,-0.1],
-    [-0.1,-1.0,-0.1,-1.0],
-    [-0.1,-0.1,-0.1,10]
-]
+# In[5]:
 
-# Initial state of the Answer Matrix
-ansmatrix = [
-    [0,0,0,0],
-    [0,0,0,0],
-    [0,-1,0,-1],
-    [0,0,0,10]
-]
 
-QArr=[]
+def is_valid_grid(row,col,grid_size):
+    return 0 <= row < grid_size and 0 <= col < grid_size
 
-def action_position(row,col,action,rewardmatrix):
+# In[6]:
+
+
+
+def next_position(row,col,action):
   """_summary_ Send the position the agent takes
 
   Args:
@@ -151,74 +130,121 @@ def action_position(row,col,action,rewardmatrix):
   """
   p_row = row
   p_col = col
-  if action == 0 and row > 0:
+  if action == 0:
     p_row -= 1
     
-  if action == 1 and row < len(rewardmatrix)-1:
+  if action == 1:
     p_row +=1
     
-  if action == 2  and col < len(rewardmatrix[0])-1:
+  if action == 2:
     p_col +=1
     
-  if action == 3 and col >0:
+  if action == 3:
     p_col -=1
     
   return p_row,p_col
+
+# In[7]:
+
+
+def valueIterations(GAMMA, Trans, rewardmatrix, ansmatrix, QArr, actions,iterations=1):
+    
+    for V in range(0,iterations):
+      customdocument = CustomDocument()
+      temp_ansmatrix = np.copy(ansmatrix)
+      
+      # Traverse row and column
+      for row in range(0,len(rewardmatrix)):
+        for col in range(0,len(rewardmatrix)):
+          # Initialize the sum
+          sum = {"up":0,"down":0,"right":0,"left":0}
+          if (row,col) == (3,3):
+            continue
+          for idx,(key,action_value) in enumerate(actions.items()):
+            plus = '+' if action_value < len(actions)-1 else ''
+            next_row,next_col = next_position(row,col,action_value)
+            #Bellman Equation used for each actions
+            if is_valid_grid(row=next_row,col=next_col,grid_size=GRID_SIZE):
+              customdocument.content += "({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["curr"],t2=float(rewardmatrix[next_row][next_col]),t3=GAMMA,t4=float(ansmatrix[next_row][next_col]),p=plus)
+              sum[key] += Trans["curr"]*(rewardmatrix[next_row][next_col] + GAMMA*ansmatrix[next_row][next_col])
+            else:
+              customdocument.content +="({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["other"],t2=float(rewardmatrix[row][col]),t3=GAMMA,t4=float(ansmatrix[row][col]),p=plus)
+              sum[key] +=Trans["curr"]*(rewardmatrix[row][col] + GAMMA*ansmatrix[row][col])
+              
+            
+            # Method for Other Actions
+            for idx,(next_key,next_action_value) in enumerate(actions.items()):
+              if next_key != key:
+                plus = '+' if next_action_value < len(actions)-1 else ''
+                next_row,next_col = next_position(row,col,next_action_value)
+                if is_valid_grid(row=next_row,col=next_col,grid_size=GRID_SIZE):
+                  customdocument.content += "({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["other"],t2=float(rewardmatrix[next_row][next_col]),t3=GAMMA,t4=float(ansmatrix[next_row][next_col]),p=plus)
+                  sum[key] += Trans["other"]*(rewardmatrix[next_row][next_col] + GAMMA*ansmatrix[next_row][next_col])
+                else:
+                  customdocument.content +="({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["other"],t2=float(rewardmatrix[row][col]),t3=GAMMA,t4=float(ansmatrix[row][col]),p=plus)
+                  sum[key] += Trans["other"]*(rewardmatrix[row][col] + GAMMA*ansmatrix[row][col])
+            
+            customdocument.enwrapactions(key,sum)   
+          
+          # Receive Q Values of 5 th Iteration          
+          if V == 4:
+            QArr.append( "\n,".join("{:.3f}".format(e) for e in  list(sum.values())) )
+            
+            
+          maxSum = max(sum.values())
+          customdocument.contentmatrix(row,col,maxSum)
+        
+          print(f"Q Values for Iteration in Row: {row} and column: {col}",list(sum.values()))
+          temp_ansmatrix[row][col]=float("{:.3f}".format(maxSum))
+          # print(f"")
+      head = "V_{no}".format(no=V+1)
+      ansmatrix = np.copy(temp_ansmatrix)
+      customdocument.addTable(ansmatrix,heading=head)
+      customdocument.fullcontent("{head}.docx".format(head=head))
+
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+import numpy as np
+GAMMA = 0.9
+
+Trans = {"curr":0.7,"other":0.1,"terminal":1} # Transition Functions where curr is intended state, other is the unintended state , terminal is the terminal state 
+
+"""
+# s₁,₁  s₁,₂  s₁,₃  s₁,₄
+# s₂,₁  s₂,₂  s₂,₃  s₂,₄
+# s₃,₁  *s₃,₂  s₃,₃  *s₃,₄
+# s₄,₁  s₄,₂  s₄,₃  s₄,₄
+"""
+# States defined for Rewards
+rewardmatrix = np.full((GRID_SIZE, GRID_SIZE), -0.1)
+rewardmatrix[2, 1] = -1  # Hell state s3,2
+rewardmatrix[2, 3] = -1  # Hell state s3,4
+rewardmatrix[3, 3] = 10
+
+# Initial state of the Answer Matrix
+ansmatrix = np.zeros((GRID_SIZE, GRID_SIZE))
+ansmatrix[2, 1] = -1  
+ansmatrix[2, 3] = -1  
+ansmatrix[3, 3] = 10
+
+QArr=[]
+
+
 
 prevV = 0
 
 actions= {"up":0,"down":1,"right":2,"left":3}
 sum = {"up":0,"down":0,"right":0,"left":0}
-for V in range(0,5):
-  customdocument = CustomDocument()
-  # Traverse row and column
-  for row in range(0,len(rewardmatrix)):
-    for col in range(0,len(rewardmatrix)):
-      sum = {"up":0,"down":0,"right":0,"left":0}
-      for idx,(key,action_value) in enumerate(actions.items()):
-        for val in range(0,len(actions)):
-          plus = '+' if val < len(actions)-1 else ''
-          loopactionval = list(actions.values())[val]
-          loop_row,loop_col = action_position(row,col,loopactionval,ansmatrix)
-          #Bellman Equation used for each actions
-          
-          if val == action_value:
-              customdocument.content += "({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["curr"],t2=float(rewardmatrix[loop_row][loop_col]),t3=GAMMA,t4=float(ansmatrix[loop_row][loop_col]),p=plus)
-              sum[key] += Trans["curr"]*(rewardmatrix[loop_row][loop_col] + GAMMA*ansmatrix[loop_row][loop_col])
-          else:
-            if [row,col] not in [hellstates,goalstate]:
-              customdocument.content +="({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["other"],t2=float(rewardmatrix[loop_row][loop_col]),t3=GAMMA,t4=float(ansmatrix[loop_row][loop_col]),p=plus)
-            sum[key] += Trans["other"]*(rewardmatrix[loop_row][loop_col] + GAMMA*ansmatrix[loop_row][loop_col])
-            
-        #Check if the Agent is currently in Terminal states
-        if [row,col] in [hellstates,goalstate]:
-          print(f"Executed where row{row} and column{col}")
-          customdocument.content +="({t1} *[{t2} + {t3}*{t4}]){p}".format(t1=Trans["terminal"],t2=float(rewardmatrix[row][col]),t3=GAMMA,t4=float(ansmatrix[row][col]))
-          sum[key] = Trans["terminal"]*(rewardmatrix[row][col] + GAMMA*ansmatrix[row][col])
-      
-      
-              
-        customdocument.enwrapactions(key,sum)          
-      if V == 4:
-        QArr.append( list(sum.values()) )
-      
-      maxSum = max(sum.values())
-      customdocument.contentmatrix(row,col,maxSum)
-        
-      
-      ansmatrix[row][col]=float("{:.3f}".format(maxSum))
-      # print(f"")
-      
-  head = "V_{no}".format(no=V+1)
-  customdocument.addTable(ansmatrix,heading=head)
-  customdocument.fullcontent("{head}.docx".format(head=head))
-
-# In[109]:
 
 
-import numpy as np
+valueIterations(GAMMA, Trans, rewardmatrix, ansmatrix, QArr, actions,iterations=1)
+
+# In[8]:
+
+
+
 try:
-    reshapedArr = np.array(QArr).reshape(8,8)
+    reshapedArr = np.array(QArr).reshape(4,4)
     Qdocument = CustomDocument()
     headQ = "Q_5"
     Qdocument.addTable(reshapedArr,heading=headQ)
